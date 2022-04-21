@@ -1,472 +1,424 @@
-#### 2.3进程同步
+#### 进程同步
 
----
-
-##### 一、进程同步的基本概念
-
-* 临界资源（对临界资源的访问，必须互斥的进行）
-  * 进入区
-  * 临界区
-  * 退出区
-  * 剩余区
-* 同步（直接制约关系）
-* 互斥（间接制约关系），访问临界资源遵循以下原则：
-  * 空闲让进
-  * 忙则等待
-  * 有限等待
-  * 让权等待
-
- 
-
----
-
-##### 二、实现临界区互斥的基本方法
-
-* 软件实现方法（Peterson解决方案）
-
-  ```
-  Perterson解决方案适用于两个进程交错执行临界区与剩余区。
-  前置条件：两个进程共享两个数据项：
-  int turn;
-  boolean flag[2];
-  
-  do {
-  	//进入区，请求进入临界资源
-  	flag[0] = true ;
-  	turn = 1;
-  	while (flag[1] && turn == 1);
-  	
-  	临界区
-  	
-  	//退出区
-  	flag[0] = false;
-  	
-  	剩余区
-  	
-  } while(true);
-  
-  1、到达进入区flag[0]=flag[1]==true; turn只能为0或1
-  2、turn==0，P0进入临界区，P1等待
-  3、P0结束，flag[0]=false，P1进入临界区
-  ```
-
-   
-
-* 硬件同步（元方法、低级方法）
-
-  * test_and_set
-
-    ```
-    boolean test_and_set(boolean *target) {
-    	boolean rv = *target;
-    	*target = true;
-    	
-    	return rv;
-    }
-    
-    do {
-    	//进入区
-    	while(test_and_set(&lock));
-    	
-    	//critical section
-    	
-    	lock = flase;
-    	
-    	//reminder section
-    
-    } while(true);
-    ```
-
-     
-
-  * compare_and_swap
-
-    ```
-    int compare_and_swap(int *value, int expected, int new_value) {
-    	int temp = *value;
-    	
-    	if(*value == expected)
-    		*value = new_value;
-    	
-    	return temp;
-    }
-    ```
-    
-     
-  
-* 互斥锁
-
+* 软件实现临界资源互斥
+* 硬件实现临界资源互斥
 * 信号量
 
-* 管程（了解）
 
- 
 
----
-
-##### 三、信号量
-
-一个信号量（semaphore）S是个整型变量，它除了初始化外只能通过两个标准原子操作：wait（）和signal（）来访问。
-
-```
-P:
-wait(S) {
-	while (S <= 0)
-		;
-	S--;
-}
-
-V:
-signal(S) {
-	S++;
-}
-
-利用信号量实现前驱关系
-初始化synch为0
-P1:
-...
-signal(synch);
-
-P2:
-wait(synch);
-...
-```
-
-```
-typedef struct{
-	int value;
-	struct process *list;
-}semaphore;
-
-wait(semaphore *S) {
-	S->value--;
-	if(S->value < 0){
-		add this process to S->list;
-		block();	//阻塞该进程
-	}
-}
-
-signal(semaphore *S) {
-	S->value++;
-	if(S->value <= 0){
-		remove this process from S->list;
-		weakup(P);	//唤醒该进程
-	}
-}
-```
-
- 
+#### 软件方法实现临界资源互斥
 
 ---
 
-##### 四、管程
+* Peterson's Algorithm（两个进程间）
 
- 封装了对共享变量的一组操作
+  ```C
+  //共享变量
+  bool flag[2];
+  int turn;
+  ```
 
-```
-monitor DiningPhilosophers
-{
-	enum {THINKING, HUNGRY, EATING} state[5];
-	condition self[5];
-	
-	void pickup(int i){
-		state[i] = HUNGRY;
-		test(i);
-		if(state[i] != EATING)
-			self[i].wait();
-	}
-	
-	void putdown(int i) {
-		state[i] = THINKING;
-		test((i + 4) % 5);
-		test((i + 1) % 5);
-	}
-	
-	void test(int i) {
-		if((state[(i + 5) % 5] != EATING) && 
-		(state[i] == HUNGRY) && 
-		(state[(i + 5) % 5] != EATING) && ) {
-			state[i] = EATING;
-			self[i].signal();
-		}
-	}
-	
-	initialization_code() {
-		for (int i=0; i<5; i++)
-			state[i] = THINKING;
-	}
-}
+  ```C
+  //进程Pi
+  flag[i] = true;
+  turn = j;
+  while(flag[j] && turn == j);
+  //进入临界区
+  flag[i] = false;
+  ```
 
-DiningPhilosophers.pickup(i);
-	...
-	eat
-	...
-DiningPhilosophers.putdown(i);
-```
+  ```C
+  //进程Pj
+  flag[j] = true;
+  turn = i;
+  while(flag[i] && trun == i);
+  //进入临界区
+  flag[j] = false;
+  ```
 
 
 
-
+#### 硬件方法实现临界资源互斥
 
 ---
 
-##### 经典同步问题
+* 中断屏蔽方法
 
-* 生产者—消费者问题（有界缓冲问题）
+* 硬件指令TestAndSet（原子操作）
 
-  ``` 
-  共享数据结构：
-  int n;
+  ```C
+  bool TestAndSet(bool *lock) {
+    bool old;
+    old = *lock;
+    *lock = true;
+    return old;
+  }
+  ```
+
+  ```C
+  //进入区
+  while(TestAndSet(&lock));
+  //临界区
+  lock = false;
+  ```
+
+* 硬件指令Swap
+
+  ```C
+  int CompareAndSwap(int *value, int expected, int new_value) {
+    int temp = *value;
+    
+    if(*value == expected) *value = new_value;
+    
+    return temp;
+  }
+  ```
+
+  ```C
+  while( CompareAndSwap(&lock, 0, 1) != 0 );
+  //临界区
+  lock = 0;
+  ```
+
+
+
+
+
+#### 信号量
+
+---
+
+* 整型信号量
+
+  ```
+  wait(S) {
+  	while(S <= 0);
+  	S = S - 1;
+  }
+  
+  signal(S) {
+  	S = S + 1;
+  }
+  ```
+
+* 记录型信号量
+
+  ```C
+  typedef struct {
+    int value;
+    struct process *L;
+  } semaphore;
+  ```
+
+  ```C
+  void wait(semaphore S) {
+    S.value--;
+    if(S.value < 0) {
+      add this process to S.L;
+      block(S.L);
+    }
+  }
+  
+  void signal(semaphore S) {
+    S.value++;
+    if(S.value <= 0) {
+      remove a process P from S.L;
+      wakeup(P);
+    }
+  }
+  ```
+
+
+
+#### 信号量应用
+
+* 信号量实现进程互斥
+
+* 信号量实现前驱关系
+
+  ```mermaid
+  graph LR
+  S1 --> S2
+  S1 --> S3
+  
+  S2 --> S4
+  S2 --> S5
+  
+  S3 --> S6
+  S4 --> S6
+  S5 --> S6
+  ```
+
+  ```C
+  semaphore a1=a2=b1=b2=c=d=e=0;
+  
+  S1() {
+    ...;
+    V(a1);V(a2);	//S1完成
+  }
+  
+  S2() {
+    P(a1);				//等待S1完成
+    ...;
+    V(b1);V(b2);	//S2完成
+  }
+  
+  S3() {
+    P(a2);				//等待S1完成
+    ...;
+    V(c);					//S3完成
+  }
+  
+  S4() {
+    P(b1);
+    ...;
+    V(d);
+  }
+  
+  S5() {
+    P(b2);
+    ...;
+    V(e);
+  }
+  
+  S6() {
+    P(c);P(d);P(e);
+    ...;
+  }
+  ```
+
+
+
+
+
+#### 经典同步问题
+
+* 生产者-消费者问题
+
+  ```shell
+  问题描述：
+  1、一组生产者进程和一组消费者进程共享一个初始为空、大小为n的缓冲区
+  2、缓冲区不满时生产者可放入消息，不空时消费者可取出消息
+  3、一次只允许一个生产者放入消息或一个消费者取出消息
+  ```
+
+  ```C
   semaphore mutex = 1;
   semaphore empty = n;
   semaphore full = 0;
   
-  生产者进程：
-  do {
-  	/* produce an item in next_produced */
-  	
-  	wait(empty);
-  	wait(mutex);
-  	
-  	/* add next_produced to the buffer */
-  	
-  	signal(mutex);
-  	signal(full);
-  	
-  } while(true);
-  
-  消费者进程：
-  do {
-  	wait(full);
-  	wait(mutex);
-  	
-  	/* remove an item from buffer to next_consumed */
-  	
-  	signal(mutex);
-  	signal(empty);
-  	
-  	/* consume the item in next_consumed */
-  	
-  } while(true);
-  ```
-
-  ```
-  例题：桌子上有一个盘子，每次只能向其中放入一个水果。爸爸专向盘子中放苹果，妈妈专向盘子中放橘子，儿子专等吃盘子中的橘子，女儿专等吃盘子中的苹果。只有盘子为空时，爸爸或妈妈才可向盘子中放入一个水果；仅当盘子中有自己需要的水果时，儿子或女儿才可以从盘子中取出。
-  
-  爸爸放苹果        妈妈放橘子
-     ↓  ⇠此处连续执行⇢  ↓
-  女儿吃苹果        儿子吃橘子
-  
-  解：
-  semaphore plate=1,apple=0,orange=0;
-  
-  dad() {
-  	do {
-  		wait(plate);
-  		
-  		/* place an apple */
-  		
-  		signal(apple);
-  	} while(true);
+  producer() {
+    while(1) {
+      produce;
+      P(empty);
+      P(mutex);
+      add to buffer;
+      V(mutex);
+      V(full);
+    }
   }
   
-  mom() {
-  	do {
-  		wait(plate);
-  		
-  		/* place an orange */
-  		
-  		signal(orange);
-  	} while(true);
+  consumer() {
+    while(1);
+    P(full);
+    P(mutex);
+    remove from buffer;
+    V(mutex);
+    V(empty);
+    consume;
+  }
+  ```
+
+* 生产者-消费者问题plus
+
+  ```mermaid
+  graph TD
+  A[爸爸放苹果] --> C[盘子]
+  B[妈妈放橘子] --> C
+  C --> D[女儿吃苹果]
+  C --> E[儿子吃橘子]
+  ```
+
+  ```C
+  semaphore plate=1, apple=0, orange=0;
+  
+  dad() {
+    P(plate);
+    add apple;
+    V(apple);
+  }
+  
+  mam() {
+    P(plate);
+    add orange;
+    V(orange);
+  }
+  
+  dau() {
+    P(apple);
+    get apple;
+    V(plate);
   }
   
   son() {
-  	do {
-  		wait(apple);
-  		
-  		/* take the apple */
-  		
-  		signal(plate);
-  	} while(true);
-  }
-  
-  daughter() {
-  	do {
-  		wait(orange);
-  		
-  		/* take the orange */
-  		
-  		signal(plate);
-  	} while(true);
+    P(orange);
+    get orange;
+    V(plate);
   }
   ```
 
-   
+* 读者-写者问题
 
-* 读者—作者问题
-
-  ```
+  ```shell
   问题描述：
-  1、允许多个读者可以同时对文件执行读操作
+  1、允许多个读者同时对文件执行读操作
   2、只允许一个写者往文件中写信息
-  3、任一写者在完成写操作之前不允许其他读者或写者工作
-  4、写者执行写操作前，应让已有的读者和写者全部退出
-  
-  semaphore rw_mutex = 1;
-  semaphore mutex = 1;
-  int read_count = 0;
-  写者进程：
-  do {
-  	wait(rw_mutex);
-  	
-  	/* writing is performed */
-  	
-  	signal(rw_mutex);
-  } while(true);
-  
-  读者进程：
-  do {
-  	wait(mutex);
-  	read_count++;
-  	if (read_count == 1)
-  		wait(rw_mutex);
-  	signal(mutex);
-  	
-  	/* reading is performed */
-  	
-  	wait(mutex);
-  	read_count--;
-  	if (read_count == 0)
-  		signal(rw_mutex);
-  	signal(mutex);
-  } while(true);
+  3、任一写者完成写操作之前不允许其他读者或写者工作
+  4、写者执行写操作前，应让已有的写者和读者全部退出
   ```
 
-  ```
-  读写公平（相对）：
-  semaphore rw_mutex = 1;
-  semaphore mutex = 1;
-  semaphore w = 1;
-  int read_count = 0;
+  ```C
+  int count = 0;				//当前读者数量
+  semaphore mutex = 1;	//更新count
+  semaphore rw = 1;
+  
   writer() {
-      do {
-          wait(w);
-          wait(rw_mutex);
-  
-          /* writing is performed */
-  
-          signal(rw_mutex);
-          signal(w);
-      } while(true);
+    while(1) {
+      P(rw);
+      writing;
+      V(rw);
+    }
   }
   
   reader() {
-      do {
-      	wait(w);
-          wait(mutex);
-          read_count++;
-          if (read_count == 1)
-              wait(rw_mutex);
-          signal(mutex);
-          signal(w);
+    while(1) {
+      P(mutex);
+      if(count == 0) P(rw);
+      count++;
+      V(mutex);
+      
+      reading;
+      
+      P(mutex);
+      count--;							//读结束计数减1
+      if(count == 0) V(rw);
+      V(mutex);
+    }
+  }
   
-          /* reading is performed */
+  //会导致写进程饿死
+  ```
+
+  ```C
+  int count = 0;
+  semaphore mutex = 1;
+  semaphore rw = 1;
+  semaphore w = 1;		//相对写优先
   
-          wait(mutex);
-          read_count--;
-          if (read_count == 0)
-              signal(rw_mutex);
-          signal(mutex);
-      } while(true);
+  writer() {
+    while(1) {
+      P(w);
+      P(rw);
+      writing;
+      V(rw);
+      V(w);
+    }
+  }
+  
+  reader() {
+    while(1) {
+      P(w);
+      P(mutex);
+      if(count == 0) P(rw);
+      count++;
+      V(mutex);
+      V(w);
+      
+      reading;
+      
+      P(mutex);
+      count--;
+      if(count == 0) V(rw);
+      V(mutex);
+    }
   }
   ```
 
-   
+* 哲学家进餐问题
 
-* 哲学家就餐问题
-
+  ```mermaid
+  graph LR
+  A --> |单只筷子| B
+  B --> |单只筷子| C
+  C --> |单只筷子| D
+  D --> |单只筷子| E
+  E --> |单只筷子| A
   ```
+
+  ```shell
   问题描述：
-  5支筷子，没人每次只能拿相邻的一只，拿到两支才能干饭。
-  
-  semaphore chopstick[5] = {1,1,1,1,1};
-  哲学家i:
-  do {
-  	wait(chopstick[i]);
-  	wait(chopstick[(i+1) % 5]);
-  	
-  	/* eat for awhile */
-  	
-  	signal(chopstick[i]);
-  	signal(chopstick[(i+1) % 5]);
-  	
-  	/* think for awhile */
-  } while(true);
-  
-  问题：
-  1、会导致死锁
-  2、需要保证没有一位哲学家被饿死
-  
+  1、哲学家饥饿时会试图拿起左右两根筷子（一根一根的拿起）。
+  2、若筷子已在他人手上，则需要等待。
+  3、同时拿到两根筷子才可以进餐，结束后放下筷子继续思考。
+  ```
+
+  ```C
   semaphore chopstick[5] = {1,1,1,1,1};
   semaphore mutex = 1;
   Pi() {
-  	do{
-  		P(mutex);
-  		P(chopstick[i]);
-  		P(chopstick[(i+1)%5]);
-  		V(mutex);
-  		
-  		eat;
-  		
-  		V(chopstick[i]);
-  		V(chopstick[(i+1)%5]);
-  		
-  		...
-  	}while(1);
+    while(1) {
+      P(mutex);
+    	P(chopstick[i]);
+    	P(chopstick[(i+1)%5]);
+    	V(mutex);
+    	eat;
+    	V(chopstick[i]);
+    	V(chopstick[(i+1)%5]);
+      think;
+    }
   }
   ```
-  
-   
-  
+
 * 吸烟者问题
 
-  ```
+  ```shell
   问题描述：
-  问题描述:假设一个系统有三个抽烟者进程和一个供应者进程。每个抽烟者不停地卷烟并抽掉它，但要卷起并抽掉一支烟，抽烟者需要有三种材料:烟草、纸和胶水。三个抽烟者中，第一个拥有烟草，第二个拥有纸，第三个拥有胶水。供应者进程无限地提供三种材料，供应者每次将两种材料放到桌子上，拥有剩下那种材料的抽烟者卷一根烟并抽掉它，并给供应者一个信号告诉已完成，此时供应者就会将另外两种材料放到桌上，如此重复(让三个抽烟者轮流地抽烟)。
-  
-  
-  int num = 0;
-  semaphore offer1=0;
-  semaphore offer2=0;
-  semaphore offer3=0;
-  semaphore finish=1;
-  
-  producer () {
-  	do {
-  		num = num++;
-  		num = num % 3;
-  		
-  		if(num == 0)
-  			V(offer1);
-  		if(num == 1)
-  			V(offer2);
-  		if(num == 2)
-  			V(offer3);
-  		
-  		P(finish);
-  	} while(true);
-  }
-  
-  smoker1 () {
-  	do {
-  		P(offer1);
-  		
-  		/* get materials, smoke */
-  		
-  		V(finish);
-  	} while(true);
-  
-  }
+  1、系统有三个抽烟者进程和一个供应者进程
+  2、每个抽烟者不停的卷烟并抽掉
+  3、卷烟需要**烟草、纸和胶水**三种材料，每个抽烟者有其中一种
+  4、供应者进程无限提供三种材料，每次提供其中两种。
+  5、拥有剩下材料的抽烟者卷烟抽掉，并给供应者信号告知已完成，此时供应者就会将另外两种材料放在桌子上
   ```
 
+   ```C
+   int num = 0;
+   semaphore offer1=offer2=offer3=0;
+   semaphore finish = 0;
+   
+   supply() {
+     while(1) {
+       num++;
+       num = num % 3;
+       if(num == 0) V(offer1);
+       else if(num == 1) V(offer2);
+       else V(offer3);
+       
+       P(finish);
+     }
+   }
+   
+   smoke_i() {
+     while(1) {
+       P(offer_i);
+       ...;
+       V(finish);
+     }
+   }
+   ```
+
   
+
+
+
+
+
